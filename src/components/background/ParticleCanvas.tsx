@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { useNexus } from '@/lib/store/nexusContext';
+import { THEMES } from '@/lib/constants/themes';
 
 interface ParticleCanvasProps {
   interactive?: boolean;
@@ -14,8 +16,11 @@ export function ParticleCanvas({
   className = ''
 }: ParticleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { currentTheme, particlesEnabled } = useNexus();
 
   useEffect(() => {
+    if (!particlesEnabled) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -25,9 +30,13 @@ export function ParticleCanvas({
     // Check prefers-reduced-motion
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    const themeConfig = THEMES[currentTheme] || THEMES.obsidian;
+    const { primary, secondary, bg } = themeConfig.particleColors;
+
     let width = window.innerWidth;
     let height = window.innerHeight;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let isTabVisible = !document.hidden;
 
     const resize = () => {
       width = window.innerWidth;
@@ -42,6 +51,11 @@ export function ParticleCanvas({
 
     resize();
     window.addEventListener('resize', resize);
+
+    const handleVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Mouse tracking for parallax
     const mouse = {
@@ -62,8 +76,10 @@ export function ParticleCanvas({
       window.addEventListener('mousemove', handleMouseMove);
     }
 
-    // Trajectory Flow Lines & Grid Nodes
-    const nodeCount = Math.min(50, Math.max(25, Math.floor((width * height) / 32000)));
+    // Adaptive node count based on screen size (faster on mobile)
+    const isMobile = width < 768;
+    const nodeCount = isMobile ? 18 : Math.min(42, Math.max(20, Math.floor((width * height) / 36000)));
+
     const nodes: Array<{
       x: number;
       y: number;
@@ -78,10 +94,10 @@ export function ParticleCanvas({
       nodes.push({
         x: Math.random() * width,
         y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        radius: Math.random() * 1.8 + 1.2,
-        color: Math.random() > 0.4 ? 'rgba(6, 182, 212,' : 'rgba(139, 92, 246,',
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
+        radius: Math.random() * 1.6 + 1.1,
+        color: Math.random() > 0.4 ? primary : secondary,
         pulse: Math.random() * Math.PI * 2
       });
     }
@@ -96,13 +112,14 @@ export function ParticleCanvas({
       alpha: number;
     }> = [];
 
-    for (let i = 0; i < 8; i++) {
+    const tokenCount = isMobile ? 4 : 7;
+    for (let i = 0; i < tokenCount; i++) {
       floatingTokens.push({
         text: tokens[i % tokens.length],
         x: Math.random() * width,
         y: Math.random() * height,
-        vy: -(Math.random() * 0.25 + 0.15),
-        alpha: Math.random() * 0.25 + 0.1
+        vy: -(Math.random() * 0.2 + 0.1),
+        alpha: Math.random() * 0.22 + 0.08
       });
     }
 
@@ -110,6 +127,11 @@ export function ParticleCanvas({
     let timeTotal = 0;
 
     const render = () => {
+      if (!isTabVisible) {
+        animationFrameId = requestAnimationFrame(render);
+        return;
+      }
+
       timeTotal += 0.015;
 
       // Smooth mouse lerp
@@ -120,11 +142,11 @@ export function ParticleCanvas({
 
       ctx.clearRect(0, 0, width, height);
 
-      // Deep obsidian space base
-      ctx.fillStyle = '#05070f';
+      // Deep theme-specific space base
+      ctx.fillStyle = bg;
       ctx.fillRect(0, 0, width, height);
 
-      // Subtle cyan & purple radial gradient aura
+      // Subtle dynamic dual radial gradient auras
       const grad1 = ctx.createRadialGradient(
         width * 0.25 - px * 20,
         height * 0.3 - py * 20,
@@ -133,8 +155,8 @@ export function ParticleCanvas({
         height * 0.3 - py * 20,
         450
       );
-      grad1.addColorStop(0, 'rgba(6, 182, 212, 0.14)');
-      grad1.addColorStop(1, 'rgba(5, 7, 15, 0)');
+      grad1.addColorStop(0, `${primary} 0.14)`);
+      grad1.addColorStop(1, `${bg}00`);
       ctx.fillStyle = grad1;
       ctx.beginPath();
       ctx.arc(width * 0.25 - px * 20, height * 0.3 - py * 20, 450, 0, Math.PI * 2);
@@ -148,8 +170,8 @@ export function ParticleCanvas({
         height * 0.65 - py * 30,
         500
       );
-      grad2.addColorStop(0, 'rgba(139, 92, 246, 0.12)');
-      grad2.addColorStop(1, 'rgba(5, 7, 15, 0)');
+      grad2.addColorStop(0, `${secondary} 0.12)`);
+      grad2.addColorStop(1, `${bg}00`);
       ctx.fillStyle = grad2;
       ctx.beginPath();
       ctx.arc(width * 0.75 - px * 30, height * 0.65 - py * 30, 500, 0, Math.PI * 2);
@@ -159,20 +181,20 @@ export function ParticleCanvas({
       ctx.beginPath();
       const waveBase = height * 0.68 - py * 15;
       ctx.moveTo(0, waveBase);
-      for (let x = 0; x <= width; x += 20) {
+      for (let x = 0; x <= width; x += 25) {
         const y =
           waveBase +
-          Math.sin(x * 0.0028 + timeTotal * 0.9) * 22 +
-          Math.cos(x * 0.0015 - timeTotal * 0.5) * 14;
+          Math.sin(x * 0.0028 + timeTotal * 0.9) * 20 +
+          Math.cos(x * 0.0015 - timeTotal * 0.5) * 12;
         ctx.lineTo(x, y);
       }
-      ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = `${primary} 0.10)`;
+      ctx.lineWidth = 1.4;
       ctx.stroke();
 
       // Neural nodes and connecting vector lines
-      const connectionDist = 130;
-      const mouseDistThreshold = 160;
+      const connectionDist = isMobile ? 90 : 120;
+      const mouseDistThreshold = 140;
 
       for (let i = 0; i < nodes.length; i++) {
         const node = nodes[i];
@@ -185,17 +207,17 @@ export function ParticleCanvas({
           else if (node.y > height) node.y = 0;
         }
 
-        const renderX = node.x - px * 22;
-        const renderY = node.y - py * 22;
+        const renderX = node.x - px * 18;
+        const renderY = node.y - py * 18;
 
         // Mouse connection line
         const dxm = mouse.x - renderX;
         const dym = mouse.y - renderY;
         const distMouse = Math.sqrt(dxm * dxm + dym * dym);
         if (distMouse < mouseDistThreshold) {
-          const alpha = (1 - distMouse / mouseDistThreshold) * 0.6;
-          ctx.strokeStyle = `rgba(6, 182, 212, ${alpha})`;
-          ctx.lineWidth = 1.2;
+          const alpha = (1 - distMouse / mouseDistThreshold) * 0.5;
+          ctx.strokeStyle = `${primary} ${alpha})`;
+          ctx.lineWidth = 1.1;
           ctx.beginPath();
           ctx.moveTo(renderX, renderY);
           ctx.lineTo(mouse.x, mouse.y);
@@ -205,16 +227,16 @@ export function ParticleCanvas({
         // Neighbors connection
         for (let j = i + 1; j < nodes.length; j++) {
           const other = nodes[j];
-          const otherX = other.x - px * 22;
-          const otherY = other.y - py * 22;
+          const otherX = other.x - px * 18;
+          const otherY = other.y - py * 18;
           const dx = otherX - renderX;
           const dy = otherY - renderY;
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist < connectionDist) {
-            const alpha = (1 - dist / connectionDist) * 0.28;
+            const alpha = (1 - dist / connectionDist) * 0.22;
             ctx.strokeStyle = `${node.color} ${alpha})`;
-            ctx.lineWidth = 1.0;
+            ctx.lineWidth = 0.9;
             ctx.beginPath();
             ctx.moveTo(renderX, renderY);
             ctx.lineTo(otherX, otherY);
@@ -223,9 +245,9 @@ export function ParticleCanvas({
         }
 
         // Draw node
-        node.pulse += 0.04;
-        const pulseSize = node.radius + Math.sin(node.pulse) * 0.5;
-        ctx.fillStyle = `${node.color} 0.8)`;
+        node.pulse += 0.035;
+        const pulseSize = node.radius + Math.sin(node.pulse) * 0.4;
+        ctx.fillStyle = `${node.color} 0.75)`;
         ctx.beginPath();
         ctx.arc(renderX, renderY, pulseSize, 0, Math.PI * 2);
         ctx.fill();
@@ -243,7 +265,7 @@ export function ParticleCanvas({
           }
         }
         ctx.fillStyle = `rgba(148, 163, 184, ${token.alpha})`;
-        ctx.fillText(token.text, token.x - px * 35, token.y - py * 35);
+        ctx.fillText(token.text, token.x - px * 25, token.y - py * 25);
       }
 
       animationFrameId = requestAnimationFrame(render);
@@ -254,11 +276,14 @@ export function ParticleCanvas({
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (interactive) {
         window.removeEventListener('mousemove', handleMouseMove);
       }
     };
-  }, [interactive]);
+  }, [interactive, currentTheme, particlesEnabled]);
+
+  if (!particlesEnabled) return null;
 
   return (
     <canvas

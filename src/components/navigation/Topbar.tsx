@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Plus,
@@ -11,9 +11,13 @@ import {
   Clock,
   RotateCcw,
   CheckCircle2,
-  Calendar
+  Calendar,
+  Palette,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useNexus } from '@/lib/store/nexusContext';
+import { THEME_LIST, THEMES } from '@/lib/constants/themes';
 import { Button } from '@/components/ui/Button';
 
 interface TopbarProps {
@@ -24,15 +28,18 @@ export function Topbar({ onToggleMobileMenu }: TopbarProps) {
   const {
     setIsSearchOpen,
     setIsNewTaskModalOpen,
-    setIsNewGoalModalOpen,
     setActiveTab,
     resetToDefaultData,
-    simulationResult,
-    isDemoMode
+    currentTheme,
+    setTheme,
+    particlesEnabled,
+    setParticlesEnabled
   } = useNexus();
 
   const [currentTime, setCurrentTime] = useState<string>('');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const update = () => {
@@ -45,6 +52,19 @@ export function Topbar({ onToggleMobileMenu }: TopbarProps) {
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+        setShowThemeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const activeThemeConfig = THEMES[currentTheme] || THEMES.obsidian;
 
   return (
     <header className="h-16 shrink-0 border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-xl px-4 sm:px-6 flex items-center justify-between gap-4 z-20">
@@ -73,7 +93,7 @@ export function Topbar({ onToggleMobileMenu }: TopbarProps) {
       </div>
 
       {/* Right: Actions, Live Clock, Simulation CTA, Notifications, Profile */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Live Telemetry Clock */}
         <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono text-slate-400">
           <Clock className="w-3.5 h-3.5 text-cyan-400" />
@@ -91,6 +111,78 @@ export function Topbar({ onToggleMobileMenu }: TopbarProps) {
           >
             <RotateCcw className="w-3 h-3" />
           </button>
+        </div>
+
+        {/* Theme Selector Popover */}
+        <div className="relative" ref={themeMenuRef}>
+          <button
+            onClick={() => setShowThemeMenu(!showThemeMenu)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all text-xs cursor-pointer shadow-sm"
+            title="Change Application Theme"
+          >
+            <Palette className="w-3.5 h-3.5 text-cyan-400" />
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm"
+              style={{ backgroundColor: activeThemeConfig.accentHex }}
+            />
+            <span className="hidden sm:inline font-mono text-[11px]">{activeThemeConfig.name}</span>
+          </button>
+
+          {showThemeMenu && (
+            <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
+                <span className="text-xs font-bold text-slate-200">Color Palette Theme</span>
+                <span className="text-[10px] font-mono text-cyan-400 uppercase">{currentTheme}</span>
+              </div>
+              <div className="space-y-1.5">
+                {THEME_LIST.map((theme) => {
+                  const isSelected = currentTheme === theme.id;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => {
+                        setTheme(theme.id);
+                        setShowThemeMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-slate-800 text-white font-medium border border-slate-700'
+                          : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm shrink-0"
+                          style={{ backgroundColor: theme.accentHex }}
+                        />
+                        <span className="truncate">{theme.name}</span>
+                      </div>
+                      {isSelected && <span className="text-[10px] text-cyan-400 font-mono">ACTIVE</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Particle Effects Quick Toggle */}
+              <div className="pt-2.5 mt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  Background Particles
+                </span>
+                <button
+                  onClick={() => setParticlesEnabled(!particlesEnabled)}
+                  className={`p-1 rounded-lg border text-xs cursor-pointer ${
+                    particlesEnabled
+                      ? 'bg-cyan-950/60 border-cyan-800 text-cyan-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                  title={particlesEnabled ? 'Pause particle animation' : 'Enable particle animation'}
+                >
+                  {particlesEnabled ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Big Action: Simulate My Future */}

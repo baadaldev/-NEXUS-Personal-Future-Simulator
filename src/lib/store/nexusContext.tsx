@@ -10,8 +10,10 @@ import {
   AlternativeScenario,
   AICoachMessage,
   TaskStatus,
-  FutureSelfProfile
+  FutureSelfProfile,
+  ThemeId
 } from '@/types/nexus';
+import { THEMES } from '@/lib/constants/themes';
 import {
   INITIAL_GOALS,
   INITIAL_TASKS,
@@ -35,6 +37,12 @@ interface NexusContextType {
   setActiveView: (view: 'landing' | 'app') => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+
+  // Visual Theme & Performance
+  currentTheme: ThemeId;
+  setTheme: (theme: ThemeId) => void;
+  particlesEnabled: boolean;
+  setParticlesEnabled: (enabled: boolean) => void;
 
   // Data Entities
   goals: Goal[];
@@ -112,13 +120,19 @@ const STORAGE_KEYS = {
   LOGS: 'nexus_logs_v1',
   PARAMS: 'nexus_params_v1',
   COACH: 'nexus_coach_v1',
-  DEMO: 'nexus_demo_v1'
+  DEMO: 'nexus_demo_v1',
+  THEME: 'nexus_theme_v1',
+  PARTICLES: 'nexus_particles_v1'
 };
 
 export function NexusProvider({ children }: { children: React.ReactNode }) {
   // Navigation
   const [activeView, setActiveView] = useState<'landing' | 'app'>('landing');
   const [activeTab, setActiveTab] = useState<string>('overview');
+
+  // Theme & Particle State
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>('obsidian');
+  const [particlesEnabled, setParticlesEnabled] = useState<boolean>(true);
 
   // Modals
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -173,6 +187,8 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
       const savedLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
       const savedParams = localStorage.getItem(STORAGE_KEYS.PARAMS);
       const savedCoach = localStorage.getItem(STORAGE_KEYS.COACH);
+      const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId | null;
+      const savedParticles = localStorage.getItem(STORAGE_KEYS.PARTICLES);
 
       if (savedGoals) setGoals(JSON.parse(savedGoals));
       if (savedTasks) setTasks(JSON.parse(savedTasks));
@@ -183,11 +199,24 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
       }
       if (savedParams) setSimulationParams(JSON.parse(savedParams));
       if (savedCoach) setAiCoachMessages(JSON.parse(savedCoach));
+      if (savedTheme && THEMES[savedTheme]) setCurrentTheme(savedTheme);
+      if (savedParticles !== null) setParticlesEnabled(savedParticles === 'true');
     } catch (e) {
       console.warn('LocalStorage initialization notice:', e);
       setActivityLogs(generateInitialActivityLogs());
     }
   }, []);
+
+  // Sync theme to document body
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', currentTheme);
+      const config = THEMES[currentTheme];
+      if (config) {
+        document.body.style.backgroundColor = config.bgHex;
+      }
+    }
+  }, [currentTheme]);
 
   // Save to LocalStorage on updates
   useEffect(() => {
@@ -197,10 +226,12 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(activityLogs));
       localStorage.setItem(STORAGE_KEYS.PARAMS, JSON.stringify(simulationParams));
       localStorage.setItem(STORAGE_KEYS.COACH, JSON.stringify(aiCoachMessages));
+      localStorage.setItem(STORAGE_KEYS.THEME, currentTheme);
+      localStorage.setItem(STORAGE_KEYS.PARTICLES, String(particlesEnabled));
     } catch (e) {
       console.warn('Failed to persist to localStorage:', e);
     }
-  }, [goals, tasks, activityLogs, simulationParams, aiCoachMessages]);
+  }, [goals, tasks, activityLogs, simulationParams, aiCoachMessages, currentTheme, particlesEnabled]);
 
   // Modal helpers
   const isModalOpen = useMemo(() => ({
@@ -568,6 +599,11 @@ export function NexusProvider({ children }: { children: React.ReactNode }) {
         momentum: simulationResult.momentumScore,
         confidence: simulationResult.confidence,
         futureSelf: simulationResult.futureSelf,
+
+        currentTheme,
+        setTheme: setCurrentTheme,
+        particlesEnabled,
+        setParticlesEnabled,
 
         isSearchOpen,
         setIsSearchOpen,

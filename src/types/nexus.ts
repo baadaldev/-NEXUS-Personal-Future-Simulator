@@ -20,6 +20,23 @@ export type TabType =
   | 'future-you' 
   | 'settings';
 
+export type ThemeId = 'obsidian' | 'midnight' | 'matrix' | 'sunset' | 'light';
+
+export interface ThemeConfig {
+  id: ThemeId;
+  name: string;
+  tagline: string;
+  accentHex: string;
+  accentClass: string;
+  bgHex: string;
+  cardBgHex: string;
+  particleColors: {
+    primary: string;
+    secondary: string;
+    bg: string;
+  };
+}
+
 export interface Skill {
   id: string;
   name: string;
